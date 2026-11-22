@@ -1,28 +1,205 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel de Cortes</title>
 <style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.6;color:#1f2937}
-h1{color:#3b0f8c}
-a{color:#e11d48}
-footer{margin-top:48px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:14px}
+:root{--ink:#1f2937;--muted:#6b7280;--brand:#3b0f8c;--accent:#e11d48;--line:#e5e7eb;--bg:#f9fafb}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:820px;margin:32px auto;padding:0 16px;line-height:1.55;color:var(--ink);background:#fff}
+h1{color:var(--brand);margin:0 0 4px}
+h2{margin:28px 0 10px;font-size:20px}
+a{color:var(--accent)}
+.card{border:1px solid var(--line);border-radius:12px;padding:18px;margin:16px 0;background:var(--bg)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:600;cursor:pointer;background:#111;color:#fff}
+.btn.alt{background:#fff;color:#111;border:1px solid #d1d5db}
+.btn.pink{background:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.profile img{width:56px;height:56px;border-radius:50%;object-fit:cover}
+.muted{color:var(--muted);font-size:14px}
+.clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.clip{border:2px solid var(--line);border-radius:10px;padding:6px;background:#fff;cursor:pointer;font-size:13px;word-break:break-all}
+.clip.sel{border-color:var(--accent)}
+.clip video{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:6px;background:#000}
+label{font-weight:600;font-size:14px;display:block;margin:12px 0 4px}
+textarea,select{width:100%;font:inherit;padding:8px;border:1px solid #d1d5db;border-radius:8px;background:#fff}
+.checks label{font-weight:400;display:flex;gap:8px;align-items:center;margin:4px 0}
+.status{font-family:ui-monospace,Menlo,monospace;font-size:14px;white-space:pre-wrap}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);width:0}
+.hidden{display:none}
+footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font-size:14px}
 </style>
 </head>
 <body>
 <h1>Painel de Cortes</h1>
-<p><strong>Painel de Cortes</strong> é uma ferramenta pessoal que edita cortes curtos de gameplay e publica os vídeos na minha própria conta do TikTok.</p>
-<h2>Como funciona</h2>
-<ul>
-<li>Seleciono trechos de gameplay e o painel gera cortes verticais prontos para o TikTok.</li>
-<li>Conecto a minha conta do TikTok com o Login Kit (login oficial do TikTok).</li>
-<li>O painel envia os vídeos para a minha conta pela Content Posting API, como rascunho ou publicação direta.</li>
-</ul>
-<p>O app é de uso pessoal do dono da conta e não é aberto ao público.</p>
-<h2>About (English)</h2>
-<p>Painel de Cortes is a personal tool that edits short gameplay clips and publishes them to the owner's own TikTok account using TikTok Login Kit and the Content Posting API.</p>
-<footer><a href="terms.html">Terms of Service</a> · <a href="privacy.html">Privacy Policy</a></footer>
+<p class="muted">Personal tool that edits short gameplay clips and publishes them to my own TikTok account.</p>
+
+<div id="offline" class="card hidden">
+  <strong>Local panel server not running.</strong>
+  <p class="muted">Start <code>painel_tiktok.py</code> on this computer, then reload this page. If Chrome asks to allow access to devices on your local network, click Allow.</p>
+</div>
+
+<section id="connect" class="card hidden">
+  <h2 style="margin-top:0">1. Connect your TikTok account</h2>
+  <p class="muted">You will be sent to TikTok to log in and authorize Painel de Cortes (Login Kit). Permissions requested: basic profile info, upload drafts and publish videos.</p>
+  <button class="btn" id="btnConnect">Continue with TikTok</button>
+</section>
+
+<section id="app" class="hidden">
+  <div class="card profile row">
+    <img id="avatar" alt="">
+    <div style="flex:1">
+      <div class="muted">Posting to TikTok as</div>
+      <strong id="nick" style="font-size:18px"></strong>
+    </div>
+    <button class="btn alt" id="btnLogout">Disconnect</button>
+  </div>
+
+  <h2>2. Choose a clip</h2>
+  <div id="clips" class="clips"></div>
+  <p id="noclips" class="muted hidden">No clips found in the local clips folder.</p>
+
+  <div class="card">
+    <h2 style="margin-top:0">3. Post details</h2>
+    <label for="title">Caption</label>
+    <textarea id="title" rows="3" maxlength="2200" placeholder="Write a caption with #hashtags"></textarea>
+
+    <label for="privacy">Who can view this video</label>
+    <select id="privacy"><option value="">Select privacy…</option></select>
+
+    <label>Allow users to</label>
+    <div class="checks">
+      <label><input type="checkbox" id="cComment"> Comment</label>
+      <label><input type="checkbox" id="cDuet"> Duet</label>
+      <label><input type="checkbox" id="cStitch"> Stitch</label>
+    </div>
+
+    <label>Content disclosure</label>
+    <div class="checks">
+      <label><input type="checkbox" id="cDisclose"> This video promotes a brand, product or service</label>
+      <div id="discloseOpts" class="hidden" style="padding-left:24px">
+        <label><input type="checkbox" id="cOrganic"> Your brand</label>
+        <label><input type="checkbox" id="cBranded"> Branded content</label>
+      </div>
+    </div>
+
+    <p class="muted" id="consent">By posting, you agree to TikTok's <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a>.</p>
+
+    <div class="row">
+      <button class="btn pink" id="btnPost" disabled>Post to TikTok</button>
+      <button class="btn alt" id="btnDraft" disabled>Send to TikTok as draft</button>
+    </div>
+    <p class="muted">After posting, it may take a few minutes for the video to appear on your profile.</p>
+  </div>
+
+  <div id="jobCard" class="card hidden">
+    <strong id="jobTitle">Uploading…</strong>
+    <div class="bar" style="margin:10px 0"><i id="jobBar"></i></div>
+    <div class="status" id="jobStatus"></div>
+  </div>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <ul>
+    <li>I select gameplay moments and the panel produces vertical clips ready for TikTok.</li>
+    <li>I connect my TikTok account using Login Kit (official TikTok login).</li>
+    <li>The panel sends the videos to my account with the Content Posting API, as a draft or a direct post.</li>
+  </ul>
+</section>
+
+<footer>
+  <a href="terms.html">Terms of Service</a> · <a href="privacy.html">Privacy Policy</a>
+</footer>
+
+<script>
+const LOCAL = 'http://localhost:8787';
+const $ = id => document.getElementById(id);
+let selected = null, creator = null;
+
+async function api(path, body){
+  const r = await fetch(LOCAL + path, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
+  const j = await r.json();
+  if(!r.ok) throw new Error(typeof j.error === 'string' ? j.error : JSON.stringify(j.error));
+  return j;
+}
+
+const PRIV = {PUBLIC_TO_EVERYONE:'Everyone', MUTUAL_FOLLOW_FRIENDS:'Friends', FOLLOWER_OF_CREATOR:'Followers', SELF_ONLY:'Only me'};
+
+async function init(){
+  let ping;
+  try { ping = await api('/api/ping'); } catch(e){ $('offline').classList.remove('hidden'); return; }
+  if(!ping.connected){ $('connect').classList.remove('hidden'); return; }
+  $('app').classList.remove('hidden');
+  const me = await api('/api/me');
+  creator = me.creator || {};
+  $('nick').textContent = creator.creator_nickname || (me.user && me.user.display_name) || '';
+  $('avatar').src = creator.creator_avatar_url || (me.user && me.user.avatar_url) || '';
+  const sel = $('privacy');
+  (creator.privacy_level_options || ['SELF_ONLY']).forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=PRIV[p]||p; sel.appendChild(o); });
+  [['comment_disabled','cComment'],['duet_disabled','cDuet'],['stitch_disabled','cStitch']].forEach(([k,id])=>{ if(creator[k]){ $(id).disabled=true; $(id).parentElement.title='Disabled in your TikTok settings'; } });
+  const {clips} = await api('/api/clips');
+  if(!clips.length) $('noclips').classList.remove('hidden');
+  clips.forEach(c => {
+    const d=document.createElement('div'); d.className='clip';
+    d.innerHTML = `<video src="${LOCAL}/api/clip/${encodeURIComponent(c.name)}#t=1" muted preload="metadata"></video><div></div><div class="muted">${c.mb} MB</div>`;
+    d.children[1].textContent = c.name;
+    d.onclick = () => { document.querySelectorAll('.clip').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); selected=c.name; const v=d.querySelector('video'); v.controls=true; v.play(); refresh(); };
+    $('clips').appendChild(d);
+  });
+}
+
+function refresh(){
+  const okPriv = !!$('privacy').value;
+  const disclose = $('cDisclose').checked;
+  const okDisc = !disclose || $('cOrganic').checked || $('cBranded').checked;
+  $('btnPost').disabled = !(selected && okPriv && okDisc);
+  $('btnDraft').disabled = !selected;
+  if($('cBranded').checked){
+    $('consent').innerHTML = 'By posting, you agree to TikTok\'s <a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noopener">Branded Content Policy</a> and <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a>.';
+    const pub = $('privacy'); if(pub.value==='SELF_ONLY'){ pub.value=''; $('btnPost').disabled=true; }
+    [...pub.options].forEach(o=>{ if(o.value==='SELF_ONLY') o.disabled=true; });
+  } else {
+    $('consent').innerHTML = 'By posting, you agree to TikTok\'s <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a>.';
+    [...$('privacy').options].forEach(o=>o.disabled=false);
+  }
+}
+['privacy','cOrganic','cBranded'].forEach(id=>$(id).addEventListener('change',refresh));
+$('cDisclose').addEventListener('change',()=>{ $('discloseOpts').classList.toggle('hidden',!$('cDisclose').checked); refresh(); });
+
+$('btnConnect').onclick = async () => { const {url} = await api('/api/auth-url'); location.href = url; };
+$('btnLogout').onclick = async () => { await api('/api/logout', {}); location.reload(); };
+
+async function send(mode){
+  $('btnPost').disabled = $('btnDraft').disabled = true;
+  $('jobCard').classList.remove('hidden');
+  $('jobTitle').textContent = mode==='direct' ? 'Posting to TikTok…' : 'Sending draft to TikTok…';
+  try{
+    const {job} = await api('/api/publish', {
+      clip:selected, mode, title:$('title').value, privacy_level:$('privacy').value,
+      allow_comment:$('cComment').checked, allow_duet:$('cDuet').checked, allow_stitch:$('cStitch').checked,
+      brand_organic:$('cDisclose').checked && $('cOrganic').checked, brand_content:$('cDisclose').checked && $('cBranded').checked
+    });
+    for(;;){
+      await new Promise(r=>setTimeout(r,1500));
+      const j = await api('/api/job/'+job);
+      $('jobBar').style.width = (j.progress||0)+'%';
+      $('jobStatus').textContent = 'Status: '+j.status + (j.error ? '\nError: '+j.error : '');
+      if(j.done){
+        if(j.status==='PUBLISH_COMPLETE') $('jobTitle').textContent='Posted! It may take a few minutes to appear on your profile.';
+        else if(j.status==='SEND_TO_USER_INBOX') $('jobTitle').textContent='Draft sent! Open the TikTok app inbox to finish editing and post.';
+        else $('jobTitle').textContent='Something went wrong.';
+        break;
+      }
+    }
+  }catch(e){ $('jobStatus').textContent='Error: '+e.message; }
+  refresh();
+}
+$('btnPost').onclick = () => send('direct');
+$('btnDraft').onclick = () => send('draft');
+init();
+</script>
 </body>
 </html>
